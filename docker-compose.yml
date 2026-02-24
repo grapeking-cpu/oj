@@ -1,0 +1,167 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: oj-postgres
+    environment:
+      POSTGRES_USER: oj
+      POSTGRES_PASSWORD: oj_password
+      POSTGRES_DB: oj
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oj"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: oj-redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: oj-nats
+    command:
+      - "--jetstream"
+      - "--mem-store=100MB"
+      - "--max-store=200MB"
+      - "--max-payload=1MB"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: oj-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oj-api
+    environment:
+      - DATABASE_URL=postgres://oj:oj_password@postgres:5432/oj?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - NATS_URL=nats://nats:4222
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - JWT_SECRET=your-jwt-secret-key-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  judge-light-1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: oj-judge-light-1
+    environment:
+      - WORKER_ID=judge-light-1
+      - CONSUMER=judge.tasks.light
+      - CONCURRENCY=2
+      - NATS_URL=nats://nats:4222
+      - DATABASE_URL=postgres://oj:oj_password@postgres:5432/oj?sslmode=disable
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  judge-light-2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: oj-judge-light-2
+    environment:
+      - WORKER_ID=judge-light-2
+      - CONSUMER=judge.tasks.light
+      - CONCURRENCY=2
+      - NATS_URL=nats://nats:4222
+      - DATABASE_URL=postgres://oj:oj_password@postgres:5432/oj?sslmode=disable
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  judge-heavy-1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: oj-judge-heavy-1
+    environment:
+      - WORKER_ID=judge-heavy-1
+      - CONSUMER=judge.tasks.heavy
+      - CONCURRENCY=1
+      - NATS_URL=nats://nats:4222
+      - DATABASE_URL=postgres://oj:oj_password@postgres:5432/oj?sslmode=disable
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: oj-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:
+  minio_data:
