@@ -8,27 +8,27 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v9"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/oj/oj-backend/internal/model"
 	"github.com/oj/oj-backend/internal/repository"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUserAlreadyExists  = errors.New("user already exists")
-	ErrInvalidPassword    = errors.New("invalid password")
-	ErrInvalidToken       = errors.New("invalid token")
-	ErrCaptchaExpired     = errors.New("captcha expired")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrInvalidPassword   = errors.New("invalid password")
+	ErrInvalidToken      = errors.New("invalid token")
+	ErrCaptchaExpired    = errors.New("captcha expired")
 	ErrCaptchaMismatch   = errors.New("captcha mismatch")
 )
 
 type UserService struct {
-	repo       *repository.UserRepo
-	redis      *redis.Client
-	jwtSecret  string
+	repo      *repository.UserRepo
+	redis     *redis.Client
+	jwtSecret string
 }
 
 func NewUserService(repo *repository.UserRepo, redisClient *redis.Client, jwtSecret string) *UserService {

@@ -1,44 +1,46 @@
+# syntax=docker/dockerfile:1
+
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-RUN apk add --no-cache git
+# Install deps
+RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy go mod files
+# Go env
+ENV GOPROXY=https://goproxy.io,direct \
+    CGO_ENABLED=0 \
+    GOOS=linux
+
+# Better layer cache
 COPY go.mod go.sum ./
-ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 
 # Copy source code
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /api ./cmd/api
+RUN go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
+
 
 # Runtime stage
 FROM alpine:3.18
 
 WORKDIR /app
 
-# Install certificates and runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+# NOTE: you use wget in HEALTHCHECK, so must install it
+RUN apk add --no-cache ca-certificates tzdata wget
 
-# Copy binary
-COPY --from=builder /api .
+COPY --from=builder /out/api ./api
 
 # Create non-root user
 RUN adduser -D -s /bin/sh appuser
-
 USER appuser
 
-# Expose port
 EXPOSE 8080
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
+  CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
 
-# Run
 CMD ["./api"]

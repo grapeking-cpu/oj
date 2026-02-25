@@ -11,7 +11,7 @@ import (
 var ErrContestNotFound = errors.New("contest not found")
 
 type ContestService struct {
-	repo     *repository.ContestRepo
+	repo       *repository.ContestRepo
 	submitRepo *repository.SubmitRepo
 }
 
@@ -56,6 +56,7 @@ func (s *ContestService) Update(id int64, contest *model.Contest) error {
 	if err != nil {
 		return ErrContestNotFound
 	}
+	_ = existing // suppress unused variable warning
 
 	contest.ID = id
 	return s.repo.Update(contest)
@@ -94,9 +95,9 @@ func (s *ContestService) GetRank(contestID int64) ([]RankItem, error) {
 	items := make([]RankItem, 0, len(participants))
 	for _, p := range participants {
 		items = append(items, RankItem{
-			UserID: p.UserID,
-			Rank:   p.Rank,
-			Score:  p.Score,
+			UserID:  p.UserID,
+			Rank:    p.Rank,
+			Score:   p.Score,
 			Penalty: p.Penalty,
 		})
 	}
@@ -105,10 +106,10 @@ func (s *ContestService) GetRank(contestID int64) ([]RankItem, error) {
 }
 
 type RankItem struct {
-	UserID   int64 `json:"user_id"`
-	Rank     int   `json:"rank"`
-	Score    int   `json:"score"`
-	Penalty  int   `json:"penalty"`
+	UserID  int64 `json:"user_id"`
+	Rank    int   `json:"rank"`
+	Score   int   `json:"score"`
+	Penalty int   `json:"penalty"`
 }
 
 func (s *ContestService) updateContestStatus(contest *model.Contest) {

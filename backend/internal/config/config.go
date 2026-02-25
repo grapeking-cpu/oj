@@ -1,9 +1,11 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -21,6 +23,9 @@ type Config struct {
 	// Server
 	Port string
 
+	// CORS
+	AllowOrigins []string
+
 	// Database
 	DatabaseURL string
 
@@ -31,33 +36,34 @@ type Config struct {
 	NATSURL string
 
 	// MinIO
-	MinIOEndpoint    string
-	MinIOAccessKey   string
-	MinIOSecretKey   string
-	MinIOBucket      string
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
 
 	// JWT
 	JWTSecret string
 
 	// Judge
-	JudgeTimeout     int
-	JudgeMaxMemory   int64
+	JudgeTimeout   int
+	JudgeMaxMemory int64
 }
 
 // Load 加载配置
 func Load() *Config {
 	return &Config{
-		Port:            getEnv("PORT", "8080"),
-		DatabaseURL:     getEnv("DATABASE_URL", "postgres://oj:oj_password@localhost:5432/oj?sslmode=disable"),
-		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
-		NATSURL:         getEnv("NATS_URL", "nats://localhost:4222"),
-		MinIOEndpoint:   getEnv("MINIO_ENDPOINT", "localhost:9000"),
-		MinIOAccessKey:  getEnv("MINIO_ACCESS_KEY", "minioadmin"),
-		MinIOSecretKey:  getEnv("MINIO_SECRET_KEY", "minioadmin"),
-		MinIOBucket:     getEnv("MINIO_BUCKET", "oj"),
-		JWTSecret:       getEnv("JWT_SECRET", "your-jwt-secret-change-in-production"),
-		JudgeTimeout:    getEnvInt("JUDGE_TIMEOUT", 30),
-		JudgeMaxMemory:  getEnvInt64("JUDGE_MAX_MEMORY", 512),
+		Port:           getEnv("PORT", "8080"),
+		AllowOrigins:   getEnvSlice("ALLOW_ORIGINS", []string{"http://localhost:5173", "http://localhost:3000"}),
+		DatabaseURL:    getEnv("DATABASE_URL", "postgres://oj:oj_password@localhost:5432/oj?sslmode=disable"),
+		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379"),
+		NATSURL:        getEnv("NATS_URL", "nats://localhost:4222"),
+		MinIOEndpoint:  getEnv("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
+		MinIOBucket:    getEnv("MINIO_BUCKET", "oj"),
+		JWTSecret:      getEnv("JWT_SECRET", "your-jwt-secret-change-in-production"),
+		JudgeTimeout:   getEnvInt("JUDGE_TIMEOUT", 30),
+		JudgeMaxMemory: getEnvInt64("JUDGE_MAX_MEMORY", 512),
 	}
 }
 
@@ -92,7 +98,7 @@ func InitRedis(url string) *redis.Client {
 	}
 
 	rdb := redis.NewClient(opt)
-	if err := rdb.Ping().Err(); err != nil {
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("Failed to connect redis: %v", err)
 	}
 
@@ -130,6 +136,28 @@ func InitMinIO(endpoint, accessKey, secretKey string) *minio.Client {
 	return client
 }
 
+// InitMinIOBucket 确保 MinIO bucket 存在
+func InitMinIOBucket(client *minio.Client, bucketName string) error {
+	exists, err := client.BucketExists(context.Background(), bucketName)
+	if err != nil {
+		return fmt.Errorf("failed to check bucket: %w", err)
+	}
+
+	if !exists {
+		if err := client.MakeBucket(context.Background(), bucketName, minio.MakeBucketOptions{
+			Region:        "us-east-1",
+			ObjectLocking: false,
+		}); err != nil {
+			return fmt.Errorf("failed to create bucket: %w", err)
+		}
+		log.Printf("Created MinIO bucket: %s", bucketName)
+	} else {
+		log.Printf("MinIO bucket already exists: %s", bucketName)
+	}
+
+	return nil
+}
+
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -152,6 +180,23 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 		var v int64
 		if _, err := fmt.Sscanf(value, "%d", &v); err == nil {
 			return v
+		}
+	}
+	return defaultValue
+}
+
+func getEnvSlice(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		// 支持逗号分隔的多个 origins
+		var result []string
+		for _, o := range strings.Split(value, ",") {
+			o = strings.TrimSpace(o)
+			if o != "" {
+				result = append(result, o)
+			}
+		}
+		if len(result) > 0 {
+			return result
 		}
 	}
 	return defaultValue

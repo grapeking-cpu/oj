@@ -53,10 +53,10 @@ func (r *ContestRepo) Delete(id int64) error {
 }
 
 type ListContestParams struct {
-	Page   int
+	Page     int
 	PageSize int
-	Type   string
-	Status string
+	Type     string
+	Status   string
 }
 
 func (r *ContestRepo) List(params ListContestParams) ([]model.Contest, int64, error) {

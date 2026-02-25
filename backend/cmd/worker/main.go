@@ -5,10 +5,11 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
-	"time"
+	// "time"
 
-	"github.com/nats-io/nats.go"
+	// "github.com/nats-io/nats.go"
 	"github.com/oj/oj-backend/internal/config"
 	"github.com/oj/oj-backend/internal/queue"
 	"github.com/oj/oj-backend/internal/repository"
@@ -46,7 +47,7 @@ func main() {
 	}
 
 	// 初始化 Judge Service
-	judgeService := judge.NewJudgeService(repos.Submit, minioClient)
+	judgeService := judge.NewJudgeService(minioClient, os.Getenv("MINIO_BUCKET"))
 
 	// 创建消费者
 	consumer := queue.NewConsumer(js, consumerName, workerID)
@@ -86,12 +87,14 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		var v int
-		if _, err := nats.ScanTokenInt(&v, value); err == nil {
-			return v
-		}
+func getEnvInt(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
 	}
-	return defaultValue
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }

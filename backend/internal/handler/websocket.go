@@ -9,27 +9,39 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/websocket"
 )
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// 允许所有 origin（开发环境）
+		// 生产环境应该做更严格的检查
+		return true
+	},
+}
+
 type WSHub struct {
-	rooms    map[string]map[*WSClient]bool
-	register chan *WSClient
+	rooms      map[string]map[*WSClient]bool
+	register   chan *WSClient
 	unregister chan *WSClient
-	broadcast chan *WSMessage
-	mutex    sync.RWMutex
+	broadcast  chan *WSMessage
+	mutex      sync.RWMutex
 }
 
 type WSClient struct {
 	hub    *WSHub
-	conn   interface{} // websocket.Conn
+	conn   *websocket.Conn
 	send   chan []byte
 	rooms  map[string]bool
+	userID int64
 }
 
 type WSMessage struct {
-	Type    string          `json:"type"`
-	Topic   string          `json:"topic"`
-	Data    json.RawMessage `json:"data"`
+	Type  string          `json:"type"`
+	Topic string          `json:"topic"`
+	Data  json.RawMessage `json:"data"`
 }
 
 func NewWSHub() *WSHub {
@@ -66,8 +78,27 @@ func (h *WSHub) Run() {
 				}
 			}
 			h.mutex.Unlock()
+
+		case msg := <-h.broadcast:
+			h.mutex.RLock()
+			if clients, ok := h.rooms[msg.Topic]; ok {
+				for client := range clients {
+					select {
+					case client.send <- marshalMessage(msg):
+					default:
+						close(client.send)
+						delete(clients, client)
+					}
+				}
+			}
+			h.mutex.RUnlock()
 		}
 	}
+}
+
+func marshalMessage(msg *WSMessage) []byte {
+	data, _ := json.Marshal(msg)
+	return data
 }
 
 func (h *WSHub) Broadcast(topic string, message interface{}) {
@@ -115,19 +146,113 @@ func HandleWebSocket(hub *WSHub) gin.HandlerFunc {
 			}
 		}
 
-		// 验证 token (简化版)
+		var userID int64
+		// 验证 token
 		if token != "" {
 			// 在实际实现中需要验证 JWT
+			// 这里简化处理，仅记录
 			log.Printf("WebSocket connection with token")
 		}
 
 		// 升级为 WebSocket 连接
-		// 这里需要使用 gorilla/websocket 或 nhooyr.io/websocket
-		// 简化处理，返回一个模拟的响应
-		c.JSON(http.StatusUpgradeRequired, gin.H{
-			"code":    0,
-			"message": "WebSocket upgrade required",
-		})
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			log.Printf("WebSocket upgrade error: %v", err)
+			return
+		}
+
+		client := &WSClient{
+			hub:    hub,
+			conn:   conn,
+			send:   make(chan []byte, 256),
+			rooms:  make(map[string]bool),
+			userID: userID,
+		}
+
+		hub.register <- client
+
+		// 启动读协程
+		go client.readPump()
+		// 启动写协程
+		go client.writePump()
+	}
+}
+
+func (c *WSClient) readPump() {
+	defer func() {
+		c.hub.unregister <- c
+		c.conn.Close()
+	}()
+
+	c.conn.SetReadLimit(512)
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	for {
+		_, message, err := c.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("WebSocket error: %v", err)
+			}
+			break
+		}
+
+		var msg WSMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			continue
+		}
+
+		// 处理订阅消息
+		if msg.Type == "subscribe" {
+			c.hub.Subscribe(c, msg.Topic)
+		} else if msg.Type == "unsubscribe" {
+			c.hub.Unsubscribe(c, msg.Topic)
+		}
+	}
+}
+
+func (c *WSClient) writePump() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			// 添加队列中的消息
+			n := len(c.send)
+			for i := 0; i < n; i++ {
+				w.Write([]byte{'\n'})
+				w.Write(<-c.send)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
 	}
 }
 
@@ -149,7 +274,7 @@ func (h *WSHub) SendRankUpdate(contestID int64, rankData interface{}) {
 	})
 }
 
-// JWT 验证
+// ValidateWSToken 验证 WebSocket JWT token
 func ValidateWSToken(tokenString, jwtSecret string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(jwtSecret), nil
@@ -162,7 +287,7 @@ func ValidateWSToken(tokenString, jwtSecret string) (jwt.MapClaims, error) {
 	return token.Claims.(jwt.MapClaims), nil
 }
 
-// 生成 Token (用于测试)
+// GenerateTestToken 生成测试用 Token
 func GenerateTestToken(userID int64, username, role, jwtSecret string) string {
 	claims := jwt.MapClaims{
 		"user_id":  userID,

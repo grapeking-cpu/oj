@@ -26,37 +26,24 @@ func main() {
 	rdb := config.InitRedis(cfg.RedisURL)
 
 	// 初始化 NATS
-	nc, js := config.InitNATS(cfg.NATSURL)
+	_, js := config.InitNATS(cfg.NATSURL)
 
 	// 初始化 MinIO
 	minioClient := config.InitMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey)
 
-	// 初始化 Repository
-	repos := &repository.Repositories{
-		User:    repository.NewUserRepo(db),
-		Problem: repository.NewProblemRepo(db),
-		Submit:  repository.NewSubmitRepo(db),
-		Contest: repository.NewContestRepo(db),
-		Lang:    repository.NewLanguageRepo(db),
+	// 确保 bucket 存在
+	if err := config.InitMinIOBucket(minioClient, cfg.MinIOBucket); err != nil {
+		log.Printf("Warning: Failed to ensure MinIO bucket: %v", err)
 	}
+
+	// 初始化 Repository
+	repos := repository.NewRepositories(db)
 
 	// 初始化 Service
-	services := &service.Services{
-		User:    service.NewUserService(repos.User, rdb, cfg.JWTSecret),
-		Problem: service.NewProblemService(repos.Problem, minioClient),
-		Submit:  service.NewSubmitService(repos.Submit, js, minioClient),
-		Contest: service.NewContestService(repos.Contest, repos.Submit),
-		Lang:    service.NewLanguageService(repos.Lang),
-	}
+	services := service.NewServices(repos, rdb, js, minioClient, cfg.JWTSecret)
 
 	// 初始化 Handler
-	handlers := &handler.Handlers{
-		User:    handler.NewUserHandler(services.User),
-		Problem: handler.NewProblemHandler(services.Problem),
-		Submit:  handler.NewSubmitHandler(services.Submit),
-		Contest: handler.NewContestHandler(services.Contest),
-		Lang:    handler.NewLanguageHandler(services.Lang),
-	}
+	handlers := handler.NewHandlers(services)
 
 	// 初始化 WebSocket Hub
 	wsHub := handler.NewWSHub()
@@ -68,7 +55,7 @@ func main() {
 	r := gin.Default()
 
 	// 中间件
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg.AllowOrigins))
 	r.Use(middleware.Logger())
 
 	// 健康检查

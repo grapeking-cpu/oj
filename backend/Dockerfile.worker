@@ -1,39 +1,35 @@
+# syntax=docker/dockerfile:1
+
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy go mod files
+ENV GOPROXY=https://goproxy.io,direct \
+    CGO_ENABLED=0 \
+    GOOS=linux
+
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
+RUN go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
+
 
 # Runtime stage
 FROM alpine:3.18
 
 WORKDIR /app
 
-# Install certificates, docker CLI, and runtime dependencies
+# docker-cli needed (you mount /var/run/docker.sock)
 RUN apk add --no-cache ca-certificates tzdata docker-cli
 
-# Copy binary
-COPY --from=builder /worker .
+COPY --from=builder /out/worker ./worker
 
-# Create non-root user
 RUN adduser -D -s /bin/sh runner
-
 USER runner
 
-# Expose port (if needed)
-EXPOSE 8080
-
-# Run worker
 CMD ["./worker"]

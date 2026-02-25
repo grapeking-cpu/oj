@@ -69,7 +69,7 @@ func (h *ProblemHandler) List(c *gin.Context) {
 func (h *ProblemHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
-	var problem service.ProblemInput
+	var problem ProblemInput
 	if err := c.ShouldBindJSON(&problem); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
@@ -92,7 +92,7 @@ func (h *ProblemHandler) Update(c *gin.Context) {
 
 	userID := c.GetInt64("user_id")
 
-	var problem service.ProblemInput
+	var problem ProblemInput
 	if err := c.ShouldBindJSON(&problem); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/oj/oj-backend/internal/repository"
 	"github.com/oj/oj-backend/internal/service"
 )
 
@@ -41,11 +42,11 @@ func (h *ContestHandler) List(c *gin.Context) {
 	contestType := c.Query("type")
 	status := c.Query("status")
 
-	params := service.ListContestParams{
-		Page:      page,
-		PageSize:  pageSize,
-		Type:      contestType,
-		Status:    status,
+	params := repository.ListContestParams{
+		Page:     page,
+		PageSize: pageSize,
+		Type:     contestType,
+		Status:   status,
 	}
 
 	contests, total, err := h.service.List(params)

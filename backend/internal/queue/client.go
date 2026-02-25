@@ -13,15 +13,15 @@ import (
 
 // JudgeTask 评测任务消息
 type JudgeTask struct {
-	SubmitID         string    `json:"submit_id"`
-	IdempotencyKey   string    `json:"idempotency_key"`
-	Problem          Problem   `json:"problem"`
-	Language         Language  `json:"language"`
-	Code             string    `json:"code"`
-	Contest          *Contest  `json:"contest"`
-	User             User      `json:"user"`
-	RetryCount       int       `json:"retry_count"`
-	CreatedAt        time.Time `json:"created_at"`
+	SubmitID       string    `json:"submit_id"`
+	IdempotencyKey string    `json:"idempotency_key"`
+	Problem        Problem   `json:"problem"`
+	Language       Language  `json:"language"`
+	Code           string    `json:"code"`
+	Contest        *Contest  `json:"contest"`
+	User           User      `json:"user"`
+	RetryCount     int       `json:"retry_count"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // Problem 题目信息
@@ -38,18 +38,18 @@ type Problem struct {
 
 // Language 语言信息
 type Language struct {
-	ID              int64    `json:"id"`
-	Slug            string   `json:"slug"`
-	SourceFilename  string   `json:"source_filename"`
-	CompileCmd      string   `json:"compile_cmd"`
-	CompileTimeout  int      `json:"compile_timeout"`
-	RunCmd          string   `json:"run_cmd"`
-	RunTimeout      int      `json:"run_timeout"`
-	DockerImage     string   `json:"docker_image"`
-	TimeFactor      float64  `json:"time_factor"`
-	MemoryFactor    float64  `json:"memory_factor"`
-	OutputLimit     int      `json:"output_limit"`
-	PidsLimit       int      `json:"pids_limit"`
+	ID             int64   `json:"id"`
+	Slug           string  `json:"slug"`
+	SourceFilename string  `json:"source_filename"`
+	CompileCmd     string  `json:"compile_cmd"`
+	CompileTimeout int     `json:"compile_timeout"`
+	RunCmd         string  `json:"run_cmd"`
+	RunTimeout     int     `json:"run_timeout"`
+	DockerImage    string  `json:"docker_image"`
+	TimeFactor     float64 `json:"time_factor"`
+	MemoryFactor   float64 `json:"memory_factor"`
+	OutputLimit    int     `json:"output_limit"`
+	PidsLimit      int     `json:"pids_limit"`
 }
 
 // User 用户信息
@@ -60,27 +60,27 @@ type User struct {
 
 // Contest 比赛信息
 type Contest struct {
-	ID              int64  `json:"id"`
-	Type            string `json:"type"`
-	PenaltyMinutes  int    `json:"penalty_minutes"`
-	FrozenMinutes   int    `json:"frozen_minutes"`
-	IsVirtual       bool   `json:"is_virtual"`
+	ID             int64  `json:"id"`
+	Type           string `json:"type"`
+	PenaltyMinutes int    `json:"penalty_minutes"`
+	FrozenMinutes  int    `json:"frozen_minutes"`
+	IsVirtual      bool   `json:"is_virtual"`
 }
 
 // JudgeResult 评测结果
 type JudgeResult struct {
-	Status         string      `json:"status"` // PENDING/RUNNING/FINISHED/SYSTEM_ERROR/DLQ
-	Score          int         `json:"score"`
-	AcceptedTest   int         `json:"accepted_test"`
-	TotalTest      int         `json:"total_test"`
-	TimeMs         int         `json:"time_ms"`
-	MemoryKB       int         `json:"memory_kb"`
-	Cases          []TestCase  `json:"cases"`
-	Error          string      `json:"error"`
-	RetryCount     int         `json:"retry_count"`
-	WorkerID       string      `json:"worker_id,omitempty"`
-	StartTime      *time.Time  `json:"start_time,omitempty"`
-	FinishTime     *time.Time  `json:"finish_time,omitempty"`
+	Status       string     `json:"status"` // PENDING/RUNNING/FINISHED/SYSTEM_ERROR/DLQ
+	Score        int        `json:"score"`
+	AcceptedTest int        `json:"accepted_test"`
+	TotalTest    int        `json:"total_test"`
+	TimeMs       int        `json:"time_ms"`
+	MemoryKB     int        `json:"memory_kb"`
+	Cases        []TestCase `json:"cases"`
+	Error        string     `json:"error"`
+	RetryCount   int        `json:"retry_count"`
+	WorkerID     string     `json:"worker_id,omitempty"`
+	StartTime    *time.Time `json:"start_time,omitempty"`
+	FinishTime   *time.Time `json:"finish_time,omitempty"`
 }
 
 // TestCase 单个测试点结果
@@ -128,12 +128,7 @@ func (c *Client) Publish(subject string, task *JudgeTask) error {
 
 // Consume 消费任务
 func (c *Client) Consume(ctx context.Context, stream, consumer string, handler func(*JudgeTask) error) error {
-	consumerInfo, err := c.js.ConsumerInfo(stream, consumer)
-	if err != nil {
-		return err
-	}
-
-	cons, err := c.js.Consumer(stream, consumer)
+	cons, err := c.js.Consumer(ctx, stream, consumer)
 	if err != nil {
 		return err
 	}

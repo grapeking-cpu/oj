@@ -11,8 +11,8 @@ import (
 var ErrProblemNotFound = errors.New("problem not found")
 
 type ProblemService struct {
-	repo     *repository.ProblemRepo
-	minio    *minio.Client
+	repo  *repository.ProblemRepo
+	minio *minio.Client
 }
 
 func NewProblemService(repo *repository.ProblemRepo, minioClient *minio.Client) *ProblemService {
@@ -50,6 +50,7 @@ func (s *ProblemService) Update(id int64, problem *model.Problem, userID int64) 
 	if err != nil {
 		return ErrProblemNotFound
 	}
+	_ = existing // suppress unused variable warning
 
 	problem.ID = id
 	problem.UpdatedBy = &userID

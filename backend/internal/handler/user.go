@@ -16,11 +16,11 @@ func NewUserHandler(s *service.UserService) *UserHandler {
 }
 
 type RegisterRequest struct {
-	Username      string `json:"username" binding:"required,min=3,max=50"`
-	Email         string `json:"email" binding:"required,email"`
-	Password      string `json:"password" binding:"required,min=8"`
-	CaptchaKey    string `json:"captcha_key" binding:"required"`
-	CaptchaCode   string `json:"captcha_code" binding:"required"`
+	Username    string `json:"username" binding:"required,min=3,max=50"`
+	Email       string `json:"email" binding:"required,email"`
+	Password    string `json:"password" binding:"required,min=8"`
+	CaptchaKey  string `json:"captcha_key" binding:"required"`
+	CaptchaCode string `json:"captcha_code" binding:"required"`
 }
 
 func (h *UserHandler) Register(c *gin.Context) {
@@ -86,8 +86,8 @@ func (h *UserHandler) GetCaptcha(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"data": gin.H{
-			"captcha_key":    key,
-			"captcha_image":  image,
+			"captcha_key":   key,
+			"captcha_image": image,
 		},
 	})
 }

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/oj/oj-backend/internal/model"
 	"github.com/oj/oj-backend/internal/queue"
-	"gorm.io/gorm"
 )
 
 // WorkerPool 评测工作池
@@ -20,24 +20,32 @@ type WorkerPool struct {
 	queue       chan *queue.JudgeTask
 	wg          sync.WaitGroup
 	service     *JudgeService
-	submitRepo  interface {
+
+	submitRepo interface {
 		UpdateStatus(id string, status string, workerID string, startTime time.Time) error
 		UpdateResult(id string, result *queue.JudgeResult) error
 		GetSubmitByID(id string) (*model.Submission, error)
 	}
-	js          interface {
-		Publish(ctx context.Context, subject string, data []byte, opts ...interface{}) (jetstream.PubAck, error)
+
+	// ✅ 修复：签名必须和 jetstream.JetStream.Publish 完全一致
+	js interface {
+		Publish(ctx context.Context, subject string, data []byte, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error)
 	}
 }
 
 // NewWorkerPool 创建工作池
-func NewWorkerPool(concurrency int, service *JudgeService, submitRepo interface {
-	UpdateStatus(id string, status string, workerID string, startTime time.Time) error
-	UpdateResult(id string, result *queue.JudgeResult) error
-	GetSubmitByID(id string) (*model.Submission, error)
-}, js interface {
-	Publish(ctx context.Context, subject string, data []byte, opts ...interface{}) (jetstream.PubAck, error)
-}) *WorkerPool {
+func NewWorkerPool(
+	concurrency int,
+	service *JudgeService,
+	submitRepo interface {
+		UpdateStatus(id string, status string, workerID string, startTime time.Time) error
+		UpdateResult(id string, result *queue.JudgeResult) error
+		GetSubmitByID(id string) (*model.Submission, error)
+	},
+	js interface {
+		Publish(ctx context.Context, subject string, data []byte, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error)
+	},
+) *WorkerPool {
 	return &WorkerPool{
 		concurrency: concurrency,
 		queue:       make(chan *queue.JudgeTask, concurrency*2),
@@ -97,21 +105,31 @@ func (p *WorkerPool) processTask(task *queue.JudgeTask) {
 		// 重试逻辑
 		if task.RetryCount < 3 {
 			task.RetryCount++
+
 			// 延迟重试
 			time.Sleep(time.Duration(task.RetryCount) * 5 * time.Second)
 
 			// 重新发布到队列
-			data, _ := json.Marshal(task)
+			data, mErr := json.Marshal(task)
+			if mErr != nil {
+				log.Printf("Failed to marshal retry task %s: %v", task.SubmitID, mErr)
+				return
+			}
+
 			subject := "judge.tasks.light"
 			if task.Language.Slug == "cpp17" || task.Language.Slug == "java17" {
 				subject = "judge.tasks.heavy"
 			}
-			p.js.Publish(context.Background(), subject, data)
+
+			if _, pubErr := p.js.Publish(context.Background(), subject, data); pubErr != nil {
+				log.Printf("Failed to republish task %s to %s: %v", task.SubmitID, subject, pubErr)
+				return
+			}
 		} else {
-			// 进入 DLQ
+			// 进入 DLQ（这里你现在只是标记结果为 DLQ，后续建议再真正 publish 到 judge.dlq）
 			result.Status = "DLQ"
 			result.Error = err.Error()
-			p.submitRepo.UpdateResult(task.SubmitID, result)
+			_ = p.submitRepo.UpdateResult(task.SubmitID, result)
 		}
 		return
 	}
@@ -127,14 +145,14 @@ func (p *WorkerPool) processTask(task *queue.JudgeTask) {
 // JudgeService 评测服务
 type JudgeService struct {
 	minioClient *minio.Client
-	bucketName string
+	bucketName  string
 }
 
 // NewJudgeService 创建评测服务
 func NewJudgeService(minioClient *minio.Client, bucketName string) *JudgeService {
 	return &JudgeService{
 		minioClient: minioClient,
-		bucketName: bucketName,
+		bucketName:  bucketName,
 	}
 }
 
@@ -214,14 +232,14 @@ func (s *JudgeService) aggregateResults(cases []queue.TestCase) *queue.JudgeResu
 	}
 
 	return &queue.JudgeResult{
-		Status:        "FINISHED",
-		Score:         totalScore,
-		AcceptedTest:  accepted,
-		TotalTest:     len(cases),
-		TimeMs:        totalTime,
-		MemoryKB:      maxMemory,
-		Cases:         cases,
-		FinishTime:    timePtr(time.Now()),
+		Status:       "FINISHED",
+		Score:        totalScore,
+		AcceptedTest: accepted,
+		TotalTest:    len(cases),
+		TimeMs:       totalTime,
+		MemoryKB:     maxMemory,
+		Cases:        cases,
+		FinishTime:   timePtr(time.Now()),
 	}
 }
 

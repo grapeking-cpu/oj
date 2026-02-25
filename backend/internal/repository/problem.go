@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"strings"
+
 	"github.com/oj/oj-backend/internal/model"
 	"gorm.io/gorm"
 )
@@ -61,6 +63,16 @@ func (r *ProblemRepo) List(params ListProblemParams) ([]model.Problem, int64, er
 	if params.Difficulty > 0 {
 		query = query.Where("difficulty = ?", params.Difficulty)
 	}
+	if params.Tags != "" {
+		// tags 是 PostgreSQL 数组，使用 @> 进行 contains 查询
+		tagList := strings.Split(params.Tags, ",")
+		for _, tag := range tagList {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				query = query.Where("? = ANY(tags)", tag)
+			}
+		}
+	}
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
 		query = query.Where("title ILIKE ?", search)
@@ -90,8 +102,14 @@ func (r *ProblemRepo) IncrementSubmitCount(id int64) error {
 }
 
 func (r *ProblemRepo) IncrementAcceptCount(id int64) error {
+	// 分两步更新，避免 GORM 多列问题
+	err := r.db.Model(&model.Problem{}).Where("id = ?", id).
+		UpdateColumn("accept_count", gorm.Expr("accept_count + ?", 1)).Error
+	if err != nil {
+		return err
+	}
+	// 更新 accept_rate
 	return r.db.Model(&model.Problem{}).Where("id = ?", id).
-		UpdateColumn("accept_count", gorm.Expr("accept_count + ?", 1),
-			"accept_rate", gorm.Expr("CAST(accept_count + 1 AS FLOAT) / NULLIF(submit_count + 1, 0)")).
-		Error
+		Update("accept_rate",
+			gorm.Expr("CAST(accept_count AS FLOAT) / NULLIF(submit_count, 0)")).Error
 }

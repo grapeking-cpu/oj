@@ -108,3 +108,14 @@ func (r *SubmitRepo) CheckIdempotency(key string) (bool, error) {
 	err := r.db.Model(&model.Submission{}).Where("idempotency_key = ?", key).Count(&count).Error
 	return count > 0, err
 }
+
+// GetSubmitByID fetches a submission by its ID
+func (r *SubmitRepo) GetSubmitByID(id string) (*model.Submission, error) {
+    var sub model.Submission
+    if err := r.db.Preload("Language").Preload("Problem").
+        Where("id = ?", id).
+        First(&sub).Error; err != nil {
+        return nil, err
+    }
+    return &sub, nil
+}

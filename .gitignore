@@ -48,3 +48,6 @@ coverage.out
 tmp/
 temp/
 *.tmp
+
+# Node.js
+**/node_modules/
