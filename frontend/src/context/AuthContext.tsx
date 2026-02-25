@@ -8,6 +8,8 @@ interface User {
   avatar?: string
   role: string
   rating: number
+  submit_count?: number
+  accept_count?: number
 }
 
 interface AuthContextType {
@@ -45,8 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const login = async (username: string, password: string) => {
-    const { token, user_id } = await apiLogin(username, password)
-    localStorage.setItem('token', token)
+    const result = await apiLogin({ username, password })
+    localStorage.setItem('token', result.token)
     await refreshUser()
   }
 

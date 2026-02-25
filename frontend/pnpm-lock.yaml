@@ -1,0 +1,77 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    specifiers:
+      '@ant-design/icons': ^5.2.6
+      '@monaco-editor/react': ^4.6.0
+      antd: ^5.12.2
+      axios: ^1.6.2
+      dayjs: ^1.11.10
+      katex: ^0.16.9
+      react: ^18.2.0
+      react-dom: ^18.2.0
+      react-markdown: ^9.0.1
+      react-router-dom: ^6.21.0
+      rehype-katex: ^7.0.0
+      remark-gfm: ^4.0.0
+      remark-math: ^6.0.0
+    dependencies:
+      '@ant-design/icons': 5.2.6
+      '@monaco-editor/react': 4.6.0
+      antd: 5.12.2_react@18.2.0
+      axios: 1.6.2
+      dayjs: 1.11.10
+      katex: 0.16.9
+      react: 18.2.0
+      react-dom: 18.2.0
+      react-markdown: 9.0.1_react@18.2.0
+      react-router-dom: 6.21.0_react@18.2.0
+      rehype-katex: 7.0.0
+      remark-gfm: 4.0.0
+      remark-math: 6.0.0
+    devDependencies:
+      '@types/katex': 0.16.7
+      '@types/node': 20.10.4
+      '@types/react': 18.2.43
+      '@types/react-dom': 18.2.17
+      '@typescript-eslint/eslint-plugin': 6.14.0
+      '@typescript-eslint/parser': 6.14.0
+      '@vitejs/plugin-react': 4.2.1
+      eslint: 8.55.0
+      eslint-plugin-react-hooks: 4.6.0
+      eslint-plugin-react-refresh: 0.4.5
+      typescript: 5.3.3
+      vite: 5.0.8
+
+packages:
+  /react@18.2.0:
+    resolution: {integrity: sha512-3giucR5tEjMbEbAbNp1C7CJYDG4R4RE2E1ObYkgZBIJRgJvK9gmbSZTEDQB/rcVnkw8C6hT8H8Py9DkgdYjfrTQ==}
+    engines: {node: '>=0.10.0'}
+    bundledDependencies: []
+    dependencies:
+      loose-envify: 1.4.0
+      object-assign: 4.1.1
+      scheduler: 0.23.0
+    devDependencies: []
+    engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
+    name: react
+    peerDependencies: {}
+    version: 18.2.0
+
+  /react-dom@18.2.0:
+    resolution: {integrity: sha512-6IMTriUmvsjHUjNtEDudZfuDQUoWXVxKHhlEGSk81n4YFS+r/Kl99wXiwlVXtPBtJenozv2P+hxDsw9eA7Xo6g==}
+    peerDependencies:
+      react: ^18.2.0
+    version: 18.2.0
+
+  /antd@5.12.2:
+    resolution: {integrity: sha512-yJ3cVgz2MMi/fR4KHk8h4YV58FHKb2L1Qe1u3RTRXzV6HJJ4aDHV5Hq7v5C4r6+L5QqKqW7PXtnKmLZ2Y5Q8eA==}
+    peerDependencies:
+      react: '>=16.9.0'
+      react-dom: '>=16.9.0'
+    version: 5.12.2

@@ -1,0 +1,97 @@
+package repository
+
+import (
+	"github.com/oj/oj-backend/internal/model"
+	"gorm.io/gorm"
+)
+
+type ProblemRepo struct {
+	db *gorm.DB
+}
+
+func NewProblemRepo(db *gorm.DB) *ProblemRepo {
+	return &ProblemRepo{db: db}
+}
+
+func (r *ProblemRepo) Create(problem *model.Problem) error {
+	return r.db.Create(problem).Error
+}
+
+func (r *ProblemRepo) GetByID(id int64) (*model.Problem, error) {
+	var problem model.Problem
+	err := r.db.First(&problem, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &problem, nil
+}
+
+func (r *ProblemRepo) GetBySlug(slug string) (*model.Problem, error) {
+	var problem model.Problem
+	err := r.db.Where("slug = ?", slug).First(&problem).Error
+	if err != nil {
+		return nil, err
+	}
+	return &problem, nil
+}
+
+func (r *ProblemRepo) Update(problem *model.Problem) error {
+	return r.db.Save(problem).Error
+}
+
+func (r *ProblemRepo) Delete(id int64) error {
+	return r.db.Delete(&model.Problem{}, id).Error
+}
+
+type ListProblemParams struct {
+	Page       int
+	PageSize   int
+	Difficulty int
+	Tags       string
+	Search     string
+	IsPublic   *bool
+}
+
+func (r *ProblemRepo) List(params ListProblemParams) ([]model.Problem, int64, error) {
+	var problems []model.Problem
+	var total int64
+
+	query := r.db.Model(&model.Problem{})
+
+	if params.Difficulty > 0 {
+		query = query.Where("difficulty = ?", params.Difficulty)
+	}
+	if params.Search != "" {
+		search := "%" + params.Search + "%"
+		query = query.Where("title ILIKE ?", search)
+	}
+	if params.IsPublic != nil {
+		query = query.Where("is_public = ?", *params.IsPublic)
+	}
+
+	query = query.Where("visible = ?", true)
+
+	err := query.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	offset := (params.Page - 1) * params.PageSize
+	err = query.Offset(offset).Limit(params.PageSize).
+		Order("id DESC").
+		Find(&problems).Error
+
+	return problems, total, err
+}
+
+func (r *ProblemRepo) IncrementSubmitCount(id int64) error {
+	return r.db.Model(&model.Problem{}).Where("id = ?", id).
+		UpdateColumn("submit_count", gorm.Expr("submit_count + ?", 1)).Error
+}
+
+func (r *ProblemRepo) IncrementAcceptCount(id int64) error {
+	return r.db.Model(&model.Problem{}).Where("id = ?", id).
+		UpdateColumn("accept_count", gorm.Expr("accept_count + ?", 1),
+			"accept_rate", gorm.Expr("CAST(accept_count + 1 AS FLOAT) / NULLIF(submit_count + 1, 0)")).
+		Error
+}
