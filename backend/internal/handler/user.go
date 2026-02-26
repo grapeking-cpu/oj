@@ -2,10 +2,30 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/oj/oj-backend/internal/service"
 )
+
+// setAuthCookie 设置 HttpOnly Cookie with SameSite=Lax
+func (h *UserHandler) setAuthCookie(c *gin.Context, token string) {
+	// 使用 Gin 的 SetCookie 方法，正确设置 SameSite
+	// 参数: name, value, maxAge, path, domain, secure, httpOnly
+	c.SetCookie(CookieTokenName, token, 86400, "/", "", false, true)
+	// 覆盖使用正确的 SameSite 设置
+	c.Header("Set-Cookie", CookieTokenName+"="+token+"; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax")
+}
+
+// clearAuthCookie 清除认证 Cookie
+func (h *UserHandler) clearAuthCookie(c *gin.Context) {
+	// 使用 Gin 的 SetCookie 方法清除 Cookie
+	c.SetCookie(CookieTokenName, "", -1, "/", "", false, true)
+	// 手动添加 SameSite=Lax 到 Header
+	c.Header("Set-Cookie", CookieTokenName+"=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax")
+}
+
+const CookieTokenName = "token"
 
 type UserHandler struct {
 	service *service.UserService
@@ -13,6 +33,16 @@ type UserHandler struct {
 
 func NewUserHandler(s *service.UserService) *UserHandler {
 	return &UserHandler{service: s}
+}
+
+// 统一错误响应
+func errorResponse(c *gin.Context, code int, message string) {
+	// 不暴露具体错误细节
+	c.JSON(code, gin.H{
+		"code":    code,
+		"message": message,
+		"data":    nil,
+	})
 }
 
 type RegisterRequest struct {
@@ -26,7 +56,7 @@ type RegisterRequest struct {
 func (h *UserHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		errorResponse(c, http.StatusBadRequest, "invalid parameters")
 		return
 	}
 
@@ -34,16 +64,30 @@ func (h *UserHandler) Register(c *gin.Context) {
 
 	user, token, err := h.service.Register(req.Username, req.Email, req.Password, req.CaptchaKey, req.CaptchaCode, ip)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		// 统一错误信息，不区分具体原因
+		if strings.Contains(err.Error(), "invalid") {
+			errorResponse(c, http.StatusBadRequest, "invalid parameters")
+		} else if strings.Contains(err.Error(), "captcha") {
+			errorResponse(c, http.StatusBadRequest, "invalid captcha")
+		} else {
+			errorResponse(c, http.StatusBadRequest, "registration failed")
+		}
 		return
 	}
 
+	// 设置 HttpOnly Cookie
+	h.setAuthCookie(c, token)
+
+	// 返回用户信息（不含敏感数据）
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"data": gin.H{
-			"user_id": user.ID,
-			"token":   token,
+			"user_id":  user.ID,
+			"username": user.Username,
+			"nickname": user.Nickname,
+			"role":     user.Role,
 		},
+		"message": "success",
 	})
 }
 
@@ -55,7 +99,7 @@ type LoginRequest struct {
 func (h *UserHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		errorResponse(c, http.StatusBadRequest, "invalid parameters")
 		return
 	}
 
@@ -63,23 +107,38 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	user, token, err := h.service.Login(req.Username, req.Password, ip)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": err.Error()})
+		// 统一错误信息
+		if strings.Contains(err.Error(), "locked") || strings.Contains(err.Error(), "attempts") {
+			errorResponse(c, http.StatusTooManyRequests, "too many attempts, please try again later")
+		} else {
+			errorResponse(c, http.StatusUnauthorized, "invalid credentials")
+		}
 		return
 	}
 
+	// 设置 HttpOnly Cookie
+	h.setAuthCookie(c, token)
+
+	// 返回用户信息
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"data": gin.H{
-			"user_id": user.ID,
-			"token":   token,
+			"user_id":     user.ID,
+			"username":    user.Username,
+			"nickname":    user.Nickname,
+			"role":        user.Role,
+			"rating":      user.Rating,
+			"submit_count": user.SubmitCount,
+			"accept_count": user.AcceptCount,
 		},
+		"message": "success",
 	})
 }
 
 func (h *UserHandler) GetCaptcha(c *gin.Context) {
 	key, image, err := h.service.GenerateCaptcha()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		errorResponse(c, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -89,6 +148,7 @@ func (h *UserHandler) GetCaptcha(c *gin.Context) {
 			"captcha_key":   key,
 			"captcha_image": image,
 		},
+		"message": "success",
 	})
 }
 
@@ -97,13 +157,26 @@ func (h *UserHandler) Info(c *gin.Context) {
 
 	user, err := h.service.GetUserInfo(userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": err.Error()})
+		errorResponse(c, http.StatusNotFound, "user not found")
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"data": user,
+		"data": gin.H{
+			"id":           user.ID,
+			"username":     user.Username,
+			"email":        user.Email,
+			"nickname":     user.Nickname,
+			"avatar":       user.Avatar,
+			"role":         user.Role,
+			"rating":       user.Rating,
+			"submit_count": user.SubmitCount,
+			"accept_count": user.AcceptCount,
+			"created_at":   user.CreatedAt,
+			"last_login_at": user.LastLoginAt,
+		},
+		"message": "success",
 	})
 }
 
@@ -152,7 +225,13 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 }
 
 func (h *UserHandler) Logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 0})
+	// 清除 Cookie
+	h.clearAuthCookie(c)
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+	})
 }
 
 func (h *UserHandler) List(c *gin.Context) {

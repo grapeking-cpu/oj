@@ -54,8 +54,8 @@ func main() {
 	// Gin 路由
 	r := gin.Default()
 
-	// 中间件
-	r.Use(middleware.CORS(cfg.AllowOrigins))
+	// 中间件 - CORS 配置支持 credentials
+	r.Use(middleware.CORS(cfg.AllowOrigins, true))
 	r.Use(middleware.Logger())
 
 	// 健康检查

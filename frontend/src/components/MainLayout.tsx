@@ -14,13 +14,11 @@ export default function MainLayout() {
     navigate('/login')
   }
 
-  const userMenu = {
-    items: [
-      { key: 'profile', label: '个人中心', onClick: () => navigate('/user') },
-      { type: 'divider' as const },
-      { key: 'logout', label: '退出登录', onClick: handleLogout },
-    ],
-  }
+  const userMenuItems = [
+    { key: 'profile', label: '个人中心', onClick: () => navigate('/user') },
+    { type: 'divider' as const },
+    { key: 'logout', label: '退出登录', onClick: handleLogout },
+  ]
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -40,7 +38,7 @@ export default function MainLayout() {
         />
         <Space>
           {isAuthenticated ? (
-            <Dropdown menu={userMenu} placement="bottomRight">
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <Space style={{ cursor: 'pointer' }}>
                 <Avatar icon={<UserOutlined />} src={user?.avatar} />
                 <span style={{ color: '#fff' }}>{user?.username}</span>

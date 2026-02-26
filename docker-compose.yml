@@ -115,7 +115,8 @@ services:
       minio:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      # 宿主机:容器 - 18080 避免与本地开发冲突 (本地 Go 后端用 8080)
+      - "18080:8080"
     restart: unless-stopped
 
   judge-light-1:

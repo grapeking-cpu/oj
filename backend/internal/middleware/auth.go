@@ -2,45 +2,39 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Auth 从 Cookie 读取 JWT 进行鉴权（仅 HttpOnly Cookie）
 func Auth(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Authorization header required"})
+		// 只从 Cookie 读取 token，不支持 Authorization header
+		tokenString, err := c.Cookie("token")
+
+		// 如果 Cookie 不存在，返回 unauthorized
+		if err != nil || tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "unauthorized"})
 			c.Abort()
 			return
 		}
-
-		// Bearer <token>
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Invalid authorization header format"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 
 		// 解析 token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(jwtSecret), nil
 		})
 
+		// token 解析失败，返回 invalid token
 		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Invalid token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "invalid token"})
 			c.Abort()
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "Invalid token claims"})
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "invalid token claims"})
 			c.Abort()
 			return
 		}

@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Spin } from 'antd'
 import { useAuth } from './context/AuthContext'
 import MainLayout from './components/MainLayout'
 import Login from './pages/Login'
@@ -11,12 +12,20 @@ import UserCenter from './pages/UserCenter'
 import AdminDashboard from './pages/AdminDashboard'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
+  // 如果正在加载认证状态，显示 loading 指示器，等待加载完成
+  if (loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>
+  }
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, loading } = useAuth()
+  // 如果正在加载认证状态，显示 loading 指示器，等待加载完成
+  if (loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>
+  }
   return isAuthenticated && user?.role === 'admin' ? <>{children}</> : <Navigate to="/" />
 }
 

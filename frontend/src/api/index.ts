@@ -2,29 +2,55 @@ import axios, { type AxiosResponse } from 'axios'
 
 const api = axios.create({
   baseURL: '/api/v1',
+  withCredentials: true, // 允许携带 Cookie
 })
 
-// 请求拦截器
+// 请求拦截器 - 不再手动添加 token，使用 HttpOnly Cookie
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     return config
   },
   (error) => Promise.reject(error)
 )
 
-// 响应拦截器
+// 响应拦截器 - 401 处理"去循环化"
+let isRedirecting = false // 跳转锁，防止多次跳转
+
 api.interceptors.response.use(
   (response: AxiosResponse) => response.data,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+    const statusCode = error.response?.status
+
+    // 401 处理：只在非登录页触发跳转
+    if (statusCode === 401) {
+      const currentPath = window.location.pathname
+      const isAuthPage = currentPath === '/login' || currentPath === '/register'
+
+      // 如果是登录页，不触发任何导航，避免循环
+      if (isAuthPage) {
+        // 清理本地可能存在的坏 token（如果有的话）
+        localStorage.removeItem('accessToken')
+        sessionStorage.removeItem('accessToken')
+        return Promise.reject(Object.assign(error, { statusCode, isAuthPage: true }))
+      }
+
+      // 非登录页的 401：清理 token 并触发一次跳转
+      localStorage.removeItem('accessToken')
+      sessionStorage.removeItem('accessToken')
+
+      if (!isRedirecting) {
+        isRedirecting = true
+        // 使用 setTimeout 避免在响应拦截器中直接导航
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 0)
+      }
     }
-    return Promise.reject(error.response?.data || error)
+
+    // 构造包含状态码的错误对象
+    const errorData = error.response?.data || error
+    const enhancedError = Object.assign(errorData, { statusCode })
+    return Promise.reject(enhancedError)
   }
 )
 
@@ -35,17 +61,36 @@ export interface LoginParams {
   password: string
 }
 
-export interface RegisterParams extends LoginParams {
+export interface RegisterParams {
+  username: string
   email: string
+  password: string
   captcha_key: string
   captcha_code: string
 }
 
+export interface LoginResponse {
+  user_id: number
+  username: string
+  nickname?: string
+  role: string
+  rating?: number
+  submit_count?: number
+  accept_count?: number
+}
+
+export interface RegisterResponse {
+  user_id: number
+  username: string
+  nickname?: string
+  role: string
+}
+
 export const login = (data: LoginParams) =>
-  api.post<{ token: string; user_id: number }>('/user/login', data).then(res => res.data)
+  api.post<LoginResponse>('/user/login', data).then(res => res.data)
 
 export const register = (data: RegisterParams) =>
-  api.post('/user/register', data).then(res => res.data)
+  api.post<RegisterResponse>('/user/register', data).then(res => res.data)
 
 export const getCaptcha = () =>
   api.get<{ captcha_key: string; captcha_image: string }>('/user/captcha').then(res => res.data)
@@ -130,8 +175,13 @@ export interface Contest {
   participant_count: number
 }
 
+export interface ContestListResponse {
+  list: Contest[]
+  total: number
+}
+
 export const getContestList = (params?: { type?: string; status?: string }) =>
-  api.get<Contest[]>('/contests', { params }).then(res => res.data)
+  api.get<ContestListResponse>('/contests', { params }).then(res => res.data)
 
 export const getContest = (id: number) =>
   api.get<any>(`/contests/${id}`).then(res => res.data)

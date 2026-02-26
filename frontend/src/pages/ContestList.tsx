@@ -14,8 +14,9 @@ export default function ContestList() {
   const loadContests = async () => {
     setLoading(true)
     try {
-      const data = await getContestList()
-      setContests(data)
+      const res = await getContestList()
+      // 后端返回 { list: [], total } 结构
+      setContests(res?.list || [])
     } catch (err) {
       console.error(err)
     } finally {
