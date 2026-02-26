@@ -10,7 +10,14 @@ import (
 func CORS(allowOrigins []string, allowCredentials bool) gin.HandlerFunc {
 	// 默认允许的 origins
 	if len(allowOrigins) == 0 {
-		allowOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
+		allowOrigins = []string{
+			"http://localhost:5173",
+			"http://localhost:3000",
+			"http://localhost",
+			"http://127.0.0.1:5173",
+			"http://127.0.0.1:3000",
+			"http://127.0.0.1",
+		}
 	}
 
 	// 返回自定义中间件，确保所有响应都有 CORS 头

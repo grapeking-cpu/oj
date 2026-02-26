@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__MiniMax__understand_image",
+      "Bash(npm run build)"
+    ]
+  }
+}

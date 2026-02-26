@@ -103,7 +103,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_BUCKET=oj
       - JWT_SECRET=your-jwt-secret-key-change-in-production
-      - ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80
+      - ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost
     depends_on:
       postgres:
         condition: service_healthy

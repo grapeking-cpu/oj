@@ -1,19 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Form, Input, Button, Card, message, Tabs, Spin } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { getCaptcha } from '@/api'
 
-interface CaptchaResponse {
-  code: number
-  data: {
-    captcha_key: string
-    captcha_image: string
-  }
-  message: string
-}
-
 export default function Login() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [captchaLoading, setCaptchaLoading] = useState(false)
   const [captcha, setCaptcha] = useState<{ captcha_key: string; captcha_image: string } | null>(null)
@@ -23,8 +16,9 @@ export default function Login() {
   const loadCaptcha = async () => {
     setCaptchaLoading(true)
     try {
-      const res = await getCaptcha() as unknown as CaptchaResponse
-      setCaptcha(res.data)
+      const res = await getCaptcha()
+      // axios 拦截器已返回 response.data，所以直接是 { captcha_key, captcha_image }
+      setCaptcha(res)
     } catch (err) {
       message.error('获取验证码失败')
     } finally {
@@ -41,8 +35,8 @@ export default function Login() {
     try {
       await login(values.username, values.password)
       message.success('登录成功')
-      // 跳转到首页
-      window.location.href = '/'
+      // 使用 React Router 跳转，确保响应处理完成
+      navigate('/')
     } catch (err: unknown) {
       const error = err as { message?: string }
       message.error(error?.message || '登录失败')
@@ -66,8 +60,8 @@ export default function Login() {
         captcha_code: values.captcha_code,
       })
       message.success('注册成功')
-      // 注册成功后刷新页面，显示登录状态
-      window.location.href = '/'
+      // 注册成功后跳转首页
+      navigate('/')
     } catch (err: unknown) {
       const error = err as { message?: string }
       message.error(error?.message || '注册失败')
@@ -132,7 +126,7 @@ export default function Login() {
                     <Spin spinning={captchaLoading}>
                       <div
                         onClick={loadCaptcha}
-                        style={{ cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: 6, overflow: 'hidden', width: 100, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: 6, overflow: 'hidden', width: 120, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         {captcha?.captcha_image ? (
                           <img src={captcha.captcha_image} alt="验证码" style={{ maxWidth: '100%', maxHeight: '100%' }} />

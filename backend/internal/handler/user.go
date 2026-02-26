@@ -8,21 +8,21 @@ import (
 	"github.com/oj/oj-backend/internal/service"
 )
 
-// setAuthCookie 设置 HttpOnly Cookie with SameSite=Lax
+// setAuthCookie 设置 HttpOnly Cookie
 func (h *UserHandler) setAuthCookie(c *gin.Context, token string) {
-	// 使用 Gin 的 SetCookie 方法，正确设置 SameSite
+	// 使用 Gin 的 SetCookie 方法
 	// 参数: name, value, maxAge, path, domain, secure, httpOnly
 	c.SetCookie(CookieTokenName, token, 86400, "/", "", false, true)
-	// 覆盖使用正确的 SameSite 设置
-	c.Header("Set-Cookie", CookieTokenName+"="+token+"; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax")
+	// 覆盖使用正确的 SameSite 设置（不设置 SameSite，兼容开发环境）
+	c.Header("Set-Cookie", CookieTokenName+"="+token+"; Path=/; HttpOnly; Max-Age=86400")
 }
 
 // clearAuthCookie 清除认证 Cookie
 func (h *UserHandler) clearAuthCookie(c *gin.Context) {
 	// 使用 Gin 的 SetCookie 方法清除 Cookie
 	c.SetCookie(CookieTokenName, "", -1, "/", "", false, true)
-	// 手动添加 SameSite=Lax 到 Header
-	c.Header("Set-Cookie", CookieTokenName+"=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax")
+	// 手动清除 SameSite 设置
+	c.Header("Set-Cookie", CookieTokenName+"=; Path=/; HttpOnly; Max-Age=0")
 }
 
 const CookieTokenName = "token"

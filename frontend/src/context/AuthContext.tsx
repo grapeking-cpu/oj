@@ -95,7 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     await apiLogin({ username, password })
-    await refreshUser()
+    // 登录成功后直接获取用户信息（不使用 refreshUser，因为此时还在登录页，isAuthPage=true 会跳过）
+    try {
+      const data = await getUserInfo()
+      setUser(data as User)
+      console.log('[Auth] 登录成功:', data)
+    } catch (err) {
+      console.error('[Auth] 登录后获取用户信息失败:', err)
+    }
   }
 
   const register = async (params: RegisterParams) => {

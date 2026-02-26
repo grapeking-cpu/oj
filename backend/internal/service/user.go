@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -9,7 +10,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -405,7 +405,7 @@ func generateCaptchaImage(code string) image.Image {
 	}
 	for i, c := range code {
 		x := 20 + i*25
-		y := 25 + randInt(0, 10)
+		y := 12 + randInt(0, 8) // 往上移动文字位置
 		fontColor := fontColors[randInt(0, len(fontColors))]
 		drawChar(img, x, y, string(c), fontColor)
 	}
@@ -505,11 +505,11 @@ func randInt(min, max int) int {
 
 func imageToBase64(img image.Image) (string, error) {
 	// 使用 PNG 编码
-	var buf strings.Builder
+	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return "", err
 	}
-	return base64.StdEncoding.EncodeToString([]byte(buf.String())), nil
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 func (s *UserService) verifyCaptcha(key, code string) error {
